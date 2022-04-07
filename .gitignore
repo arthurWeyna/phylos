@@ -1,0 +1,6 @@
+
+
+.snakemake
+*.backup
+*.my
+tools/stan/divergence_model.rds
