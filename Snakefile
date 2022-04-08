@@ -27,6 +27,7 @@ FREEBAYES_OPT="--min-alternate-count 1 -z 0.05"
 VCFTOOLS_FILTER_OPT="--remove-indels --minQ 30 --minDP 5"
 BCFTOOLS_CONSENSUS_MINDP=4 #Min depth to report nucleotide in consensus. Positions with less will be "-"
 BCFTOOLS_CONSENSUS_MAXGAPPROP=0.5 #remove consensus sequences with more than this proportion of gaps.
+HETCOUNTS_CONTAM_OPT="10 0.1" #1: min dp to consider snp; #2: alt allele prob for contam filter
 GROUPALIGN_MAFFT_OPT="--auto --adjustdirection"
 GROUPALIGN_THREADS=4
 TRIMAL_OPT="-gt 0.5 -st 0.8 -w 5"
@@ -69,11 +70,11 @@ rule all:
 		#[ID]-[REFID][EXTENSION FOR REF FILE]bwa[EXTENSION FOR FASTQ OF ID]freebayes[EXT]
 		###PHYLOS
 		#expand("{PATH}/{ID}-SRR4292931_ref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID="SRR4292903 SRR4292904 SRR4292914 SRR4292915".split(" ")),
-		expand("{PATH}/test-SRR4292931_ref.bwa.fastp.freebayes.bcfconsensus.matrix.trimal.fasta.treefile", PATH=DATADIR, ID="SRR4292903 SRR4292904 SRR4292914 SRR4292915".split(" ")),
-		#expand("{PATH}/SRR4292904-pat-SRR4292931_ref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID="SRR4292903 SRR4292904 SRR4292914 SRR4292915".split(" ")),
+		#expand("{PATH}/{ID}-pat-SRR4292931_ref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID="SRR4292904".split(" ")),
+		#expand("{PATH}/test-SRR4292931_ref.bwa.fastp.freebayes.bcfconsensus.matrix.trimal.fasta.treefile", PATH=DATADIR, ID="SRR4292903 SRR4292904 SRR4292914 SRR4292915".split(" ")),
 		###SCANS
-		#expand("{PATH}/{ID}-SRR4292931_ref.bwa.fastp.angsd.divestim.txt", PATH=DATADIR, ID="SRR4292903 SRR4292904 SRR4292914 SRR4292915".split(" ")),
-		#expand("{PATH}/test-SRR4292931_ref.bwa.fastp.angsd.divestim.gathered.txt", PATH=DATADIR),
+		#expand("{PATH}/{ID}-SRR4292931_ref.bwa.fastp.contamhet.divestim.txt", PATH=DATADIR, ID="SRR4292904".split(" ")),
+		expand("{PATH}/{GRP}-SRR4292931_ref.bwa.fastp.{MET}.divestim.gathered.txt", PATH=DATADIR, GRP="test2".split(" "), MET="angsd contamhet".split(" ")),
 
 
 
@@ -456,6 +457,18 @@ rule angsd_run:
                 "thetaStat do_stat {output.thetaidx};"
                 "cp {output.pestpg} {output.stats};"
                 """ awk 'NR!=1{{print $2" "$14+1" "$4}}' {output.stats} | sort -k 1 > {output.counts}; """
+
+#######################################################
+#count number of heterozygous snps per contigs from vcf. Applies contamination filter and takes bed into account to compute contig length.
+rule het_sites_count_run:
+	input:
+		covbed="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}coverage.bed",
+		vcf="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}freebayes.vcf",
+	output:
+                counts="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}contamhet.counts.txt",
+	shell:
+		"python {TOOLDIR}/scripts/vcf_hetcontam_count.py {input.vcf} {input.covbed} {HETCOUNTS_CONTAM_OPT} > {output.counts};"
+		
 
 
 #######################################################

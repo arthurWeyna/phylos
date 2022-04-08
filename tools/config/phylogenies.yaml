@@ -18,3 +18,4 @@ dependencies:
   - trimal =1.4.1
   - iqtree =2.2.0_beta
   - numpy =1.16
+  - scipy =1.5.3
