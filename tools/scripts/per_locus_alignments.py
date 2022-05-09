@@ -9,7 +9,7 @@ import concurrent.futures
 fasta_list=sys.argv[1]
 working_dir=sys.argv[2]
 align_command=sys.argv[3]
-align_threads=sys.argv[4]
+align_threads=int(sys.argv[4])
 
 def fasta_align(fasta):
     nind=sum([1 for l in open(fasta, "r")  if re.search("^>", l)])
@@ -31,6 +31,7 @@ os.makedirs(working_dir)
 fastas=sorted([f.rstrip() for f in open(fasta_list, "r")])
 outfiles=[]
 for f in fastas:
+    print(f)
     for l in open(f, "r"):
         if re.search("^>", l):
             outfile=working_dir+"/"+re.sub("^>", "", l).rstrip()+".fasta"
@@ -44,7 +45,7 @@ for f in fastas:
                 out.close()
 
 ##Align per locus files
-executor = concurrent.futures.ProcessPoolExecutor(2)
+executor = concurrent.futures.ProcessPoolExecutor(align_threads)
 futures = [executor.submit(fasta_align, f) for f in outfiles]
 concurrent.futures.wait(futures)
 
