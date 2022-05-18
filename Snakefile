@@ -10,8 +10,8 @@ DATADIR="/media/bigvol/arthur/phylogenies/phylos/data"
 #Path to tools directory
 TOOLDIR="/media/bigvol/arthur/phylogenies/phylos/tools"
 #Path to run file (group, id)
-RUN_FILE="/media/bigvol/arthur/phylogenies/phylos/phylo_list"
-MOM_FILE="/media/bigvol/arthur/phylogenies/phylos/mother_daughter_list"
+RUN_FILE="/media/bigvol/arthur/phylogenies/phylos/phylo_list.my"
+MOM_FILE="/media/bigvol/arthur/phylogenies/phylos/mother_daughter_list.my"
 
 FASTP_THREADS=5
 FASTP_OPT="-q 20 -u 70 -n 40 -l 40 -w 1"
@@ -24,9 +24,11 @@ BWA_OPT="-k 19"
 STAN_THREADS=2
 STAN_OPT="2 1000 10000"
 FREEBAYES_OPT="--min-alternate-count 1 -z 0.05"
+FREEBAYES_GROUP_THREADS=30
 VCFTOOLS_FILTER_OPT="--remove-indels --minQ 30 --minDP 5"
 BCFTOOLS_CONSENSUS_MINDP=4 #Min depth to report nucleotide in consensus. Positions with less will be "-"
 BCFTOOLS_CONSENSUS_MAXGAPPROP=0.8 #remove consensus sequences with more than this proportion of gaps.
+BCFTOOLS_MERGE_MINDP=4 #Min depth for every individual to consider region in vcf merging
 BCFTOOLS_MERGE_THREADS=10
 HETCOUNTS_CONTAM_OPT="10 0.1" #1: min dp to consider snp; #2: alt allele prob for contam filter
 GROUPALIGN_MAFFT_OPT="--auto --adjustdirection"
@@ -34,6 +36,8 @@ GROUPALIGN_THREADS=20
 TRIMAL_OPT="-gt 0.9 -st 0.8 -w 5"
 IQTREE_OPT="-m GTR+I+F+G4 -bb 1000"
 IQTREE_THREADS=30
+GENOMESCOPE_THREADS=4
+
 
 #Construct dic with ids for each group in RUN_FILE
 GRPDIC={k:[] for k in [l.rstrip().split(" ")[0] for l in open(RUN_FILE, "r") if not re.search("^#", l)]}
@@ -59,7 +63,8 @@ wildcard_constraints:
     EXT2="[^/-]*",
     SP="[^/\.]*",
     DB="[^/\.]*",
-    FILE="[^/]*"
+    FILE="[^/]*",
+    KMER="[0-9]*"
 
 
 ruleorder:
@@ -72,16 +77,18 @@ ruleorder:
 	bcftools_consensus_run > mother_phase_run
 ruleorder:
     get_backup_consensus_sequences > bcftools_consensus_run
+ruleorder:
+	genomescope_pese_run > genomescope_pe_run > genomescope_se_run
 
 #######################################################
 #####TARGETS###########################################
 #######################################################
 #Require final output. Comment out unwanted output.
 rule all: 
-	input: 
+    input: 
 		#[ID]-[REFID][EXTENSION FOR REF FILE]bwa[EXTENSION FOR FASTQ OF ID]freebayes[EXT]
         ###SCANS
-		expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.txt", PATH=DATADIR, ID=GRPDIC["Messor"], MET="angsd contamhet".split(" ")),
+		#expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.txt", PATH=DATADIR, ID=GRPDIC["Messor"], MET="angsd contamhet".split(" ")),
 		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.gathered.txt", PATH=DATADIR, GRP="Messor".split(" "), MET="angsd contamhet".split(" ")),
         ###CONSENSUS SEQUENCES ONLY
 		#expand("{PATH}/{ID}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID=GRPDIC["Messor"]),
@@ -99,8 +106,11 @@ rule all:
 		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.{GENE}_singlegene.trimal.fasta.treefile", PATH=DATADIR, GRP="Messor".split(" "), GENE=NUCGENES),
         ###SNPS
 		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfmerged.vcf", PATH=DATADIR, GRP="allstructor".split(" ")),
-        
-		
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayesgrp.vcf", PATH=DATADIR, GRP="allstructor".split(" ")),
+        ###NQUIRE
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.nquire.gathered.txt", PATH=DATADIR, GRP="Messor".split(" "))
+        ###SMUDGEPLOT
+        expand("{PATH}/{ID}.fastp.gscope_k{KMER}.histo", PATH=DATADIR, ID="SH02-23 SH02-24".split(" "), KMER="11 15 21 26 31 36".split(" "))
 
 
 #######################################################
@@ -335,6 +345,25 @@ rule freebayes_run:
 		"freebayes -f {input.ref} {FREEBAYES_OPT} {input.bam} | bcftools norm -f {input.ref} - > {output}"
 
 #######################################################
+#call snp using freebayes
+rule freebayes_group_run:
+    input:
+        bams=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}bam", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
+        bais=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}bam.bai", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
+        ref="{PATH}/{REF}{EXT}fasta",
+        refindex="{PATH}/{REF}{EXT}fasta.fai",
+    output:
+        list="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}freebayesgrp.list",
+        vcf="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}freebayesgrp.vcf", 
+    threads: int(FREEBAYES_GROUP_THREADS)
+    shell:
+        "echo {input.bams} | tr ' ' '\n' > {output.list};"
+        "cp {output.list} {output.list}plop;"
+        "freebayes-parallel <(fasta_generate_regions.py {input.refindex} 100000) {threads} -f {input.ref} --bam-list {output.list} {FREEBAYES_OPT} | bcftools norm -f {input.ref} - > {output.vcf};"
+##        "freebayes -f {input.ref} --bam-list {output.list} {FREEBAYES_OPT} | bcftools norm -f {input.ref} - > {output.vcf};"
+
+
+#######################################################
 #run bedtools to compute coverage
 rule bedtools_genomecov_run:
 	input:
@@ -420,13 +449,22 @@ rule vcf_merge:
     input:
         ref="{PATH}/{REF}{EXT}fasta",	
         vcfs=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}freebayes.vcf.gz", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
-        index=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}freebayes.vcf.gz.csi", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2)
+        index=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}freebayes.vcf.gz.csi", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
+        beds=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}coverage.bed", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
     output:
-        "{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}freebayes.bcfmerged.vcf",
+        badbed="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}badcoverage.bed",
+        goodbed="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}goodcoverage.bed",
+        gen="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}refgenome.bed",
+        vcf="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}freebayes.bcfmerged.vcf",
     threads:
         int(BCFTOOLS_MERGE_THREADS)
     shell:
-        "bcftools merge --threads {threads} -m all {input.vcfs} | bcftools norm -f {input.ref} > {output};"
+        """ awk -v OFS="\t" '/>/{{head=$0; sub("^>", "", head)}}; !/>/{{print head,length($0)}}' {input.ref} | sort -k1,1 > {output.gen}; """
+        "echo 'Computing coverage!';"
+        "awk -v min={BCFTOOLS_MERGE_MINDP} '$4<min' {input.beds} | sort -k1,1 -k2,2n | bedtools merge > {output.badbed};"
+        "bedtools complement -L -i {output.badbed} -g {output.gen} > {output.goodbed};"
+        "echo 'Merging vcf files!';"
+        "bcftools merge --threads {threads} -R {output.goodbed} -0 -m all {input.vcfs} | bcftools norm -f {input.ref} > {output.vcf};"
 
 #######################################################
 #group-wise per-locus alignments + supermatrix
@@ -577,13 +615,133 @@ rule divergence_estimations_run:
 
 #######################################################
 #gather results for all ids in a group
-rule divergence_estimations_gather:
+rule estimations_gather:
     input:
         lambda wildcards: expand("{PATH}/{ID}{EXT}txt", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], EXT=wildcards.EXT)
     output:
         "{PATH}/{GRP}{EXT}gathered.txt",
     shell:
         """ awk 'NR==1{{print}}; FNR!=1{{print}}' {input} > {output}; """
+
+#######################################################
+#Estimate ploidy with nQuire
+rule nquire_run:
+    input:
+        bam="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}bam",
+        bamindex="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}bam.bai",
+    output:
+        bin=temp("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}nquire.bin"),
+        est="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}nquire.txt"
+    shell:
+        "{TOOLDIR}/nQuire/nQuire create -f 0.2 -b {input.bam} -o {wildcards.PATH}/{wildcards.ID}-{wildcards.REF}{wildcards.EXT}bwa{wildcards.EXT2}nquire;"
+        "cp {output.bin} {output.bin}plop;"
+        """ {TOOLDIR}/nQuire/nQuire estmodel {output.bin} | awk -v head="file" -v val={output.est} -v FS=" = " '/loglik/{{sub("^.* ", "", $0); head=head" nQ_logLik"; val=val" "$0}}; /a =/{{cnt2++}}; /=/{{gsub(" ", "", $1); head=head" nQ_"cnt2"_"$1; val=val" "$2}}; END{{print head; print val}}' > {output.est}; """
+
+
+#######################################################
+#Run genomescope
+rule genomescope_pese_run:
+    input:	
+        forward="{PATH}/{ID}_1{EXT}fastq.gz",
+        reverse="{PATH}/{ID}_2{EXT}fastq.gz",
+        single="{PATH}/{ID}{EXT}fastq.gz"
+    output:
+        jf=temp("{PATH}/{ID}{EXT}gscope_k{KMER}.jf"),
+        histo="{PATH}/{ID}{EXT}gscope_k{KMER}.histo",
+        out=directory("{PATH}/{ID}{EXT}gscope_k{KMER}")
+    threads: int(GENOMESCOPE_THREADS)
+    params:
+        env="genomescope_env",
+    shell:
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};"
+        "zcat {input} | jellyfish count /dev/fd/0 -C -m {wildcards.KMER} -s 1000000000 -t {threads} -o {output.jf};"
+        "jellyfish histo -t {threads} {output.jf} > {output.histo};"
+        "genomescope2 -i {output.histo} -o {output.out} -k {wildcards.KMER};"
+
+
+#######################################################
+#Run genomescope
+rule genomescope_pe_run:
+    input:	
+        forward="{PATH}/{ID}_1{EXT}fastq.gz",
+        reverse="{PATH}/{ID}_2{EXT}fastq.gz",
+    output:
+        jf=temp("{PATH}/{ID}{EXT}gscope_k{KMER}.jf"),
+        histo="{PATH}/{ID}{EXT}gscope_k{KMER}.histo",
+        out=directory("{PATH}/{ID}{EXT}gscope_k{KMER}")
+    threads: int(GENOMESCOPE_THREADS)
+    params:
+        env="genomescope_env",
+    shell:
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};"
+        "zcat {input} | jellyfish count /dev/fd/0 -C -m {wildcards.KMER} -s 1000000000 -t {threads} -o {output.jf};"
+        "jellyfish histo -t {threads} {output.jf} > {output.histo};"
+        "genomescope2 -i {output.histo} -o {output.out} -k {wildcards.KMER};"
+
+#######################################################
+#Run genomescope
+rule genomescope_se_run:
+    input:	
+        single="{PATH}/{ID}{EXT}fastq.gz"
+    output:
+        jf=temp("{PATH}/{ID}{EXT}gscope_k{KMER}.jf"),
+        histo="{PATH}/{ID}{EXT}gscope_k{KMER}.histo",
+        out=directory("{PATH}/{ID}{EXT}gscope_k{KMER}")
+    threads: int(GENOMESCOPE_THREADS)
+    params:
+        env="genomescope_env",
+    shell:
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};"
+        "zcat {input} | jellyfish count /dev/fd/0 -C -m {wildcards.KMER} -s 1000000000 -t {threads} -o {output.jf};"
+        "jellyfish histo -t {threads} {output.jf} > {output.histo};"
+        "genomescope2 -i {output.histo} -o {output.out} -k {wildcards.KMER};"
+
+
+
+#######################################################
+#Run genomescope (
+rule smudgeplot_run:
+    input:
+        jf="{PATH}/{ID}{EXT}gscope_k{KMER}.jf",
+        histo="{PATH}/{ID}{EXT}gscope_k{KMER}.histo",
+    output:
+        cut="{PATH}/{ID}{EXT}gscope_k{KMER}_cutoffs.tsv",
+        cov="{PATH}/{ID}{EXT}gscope_k{KMER}_coverages.tsv",
+        seq="{PATH}/{ID}{EXT}gscope_k{KMER}_sequences.tsv",
+        sumt="{PATH}/{ID}{EXT}gscope_k{KMER}_summary_table.tsv",
+        sumv="{PATH}/{ID}{EXT}gscope_k{KMER}_verbose_summary.txt",
+        warn="{PATH}/{ID}{EXT}gscope_k{KMER}_warnings.txt",
+        plot="{PATH}/{ID}{EXT}gscope_k{KMER}_smudgeplot.png",
+        plotl10="{PATH}/{ID}{EXT}gscope_k{KMER}_smudgeplot_log10.png"
+    params:
+        env="genomescope_env",
+        id="{PATH}/{ID}{EXT}gscope_k{KMER}"
+    threads: int(GENOMESCOPE_THREADS) #necessary to limit memory usage...
+    shell:
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};"
+        "L=$(smudgeplot.py cutoff {input.histo} L); U=$(smudgeplot.py cutoff {input.histo} U); echo $L $U > {output.cut};"
+        
+        "jellyfish dump -c -L $L -U $U {input.jf} | smudgeplot.py hetkmers -o {params.id};"
+        "smudgeplot.py plot {output.cov} -o {params.id};"
+    
+       
+        
+
+
+
+
+
+
+
+
 
 
 

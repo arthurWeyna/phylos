@@ -36,7 +36,6 @@ for l in open(vcf, "r"):
                 probhomo=scipy.stats.binom.pmf(dps[1], dps[0]+dps[1], prob_alt_null)
                 if probhet > probhomo:
                     contigs[l3[0]][1]=contigs[l3[0]][1]+1 
-                    print(gt)
 
 
 for i in contigs.keys():
