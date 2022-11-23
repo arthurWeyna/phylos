@@ -11,7 +11,7 @@ DATADIR="/media/bigvol/arthur/phylogenies/phylos/data"
 TOOLDIR="/media/bigvol/arthur/phylogenies/phylos/tools"
 #Path to run file (group, id)
 RUN_FILE="/media/bigvol/arthur/phylogenies/phylos/phylo_list.my"
-MOM_FILE="/media/bigvol/arthur/phylogenies/phylos/mother_daughter_list.my"
+MOM_FILE="/media/bigvol/arthur/phylogenies/phylos/mother_daughter_list.my2"
 
 FASTP_THREADS=5
 FASTP_OPT="-q 20 -u 70 -n 40 -l 40 -w 1"
@@ -19,24 +19,34 @@ MEGAHIT_THREADS=5
 MEGAHIT_OPT="--k-min 31 --k-max 101 --k-step 10"
 BUSCO_THREADS=5
 BUSCO_OPT="-m genome"
-BWA_THREADS=10
+BWA_THREADS=3
 BWA_OPT="-k 19"
 STAN_THREADS=2
 STAN_OPT="2 1000 10000"
 FREEBAYES_OPT="--min-alternate-count 1 -z 0.05"
 FREEBAYES_GROUP_THREADS=30
-VCFTOOLS_FILTER_OPT="--remove-indels --minQ 30 --minDP 5"
+VCF_COMPRESS_THREADS=3
 BCFTOOLS_CONSENSUS_MINDP=4 #Min depth to report nucleotide in consensus. Positions with less will be "-"
 BCFTOOLS_CONSENSUS_MAXGAPPROP=0.8 #remove consensus sequences with more than this proportion of gaps.
 BCFTOOLS_MERGE_MINDP=4 #Min depth for every individual to consider region in vcf merging
-BCFTOOLS_MERGE_THREADS=10
+BCFTOOLS_MERGE_MINDP=2 #Min depth for every individual to consider region in vcf merging
+BCFTOOLS_MERGE_THREADS=40
+PLINK_GDIST_OPT="--distance square0 1-ibs"
+PLINK_GDIST_THREADS=40
+VCFTOOLS_FILTER_OPT="--remove-indels --min-meanDP 2.5 --min-alleles 2 --maf 0.02  --max-missing 0.9"
 HETCOUNTS_CONTAM_OPT="10 0.1" #1: min dp to consider snp; #2: alt allele prob for contam filter
 GROUPALIGN_MAFFT_OPT="--auto --adjustdirection"
-GROUPALIGN_THREADS=20
-TRIMAL_OPT="-gt 0.9 -st 0.8 -w 5"
-IQTREE_OPT="-m GTR+I+F+G4 -bb 1000"
-IQTREE_THREADS=30
+GROUPALIGN_THREADS=40
+TRIMAL_OPT="-gt 0.93 -st 0.8 -w 5"
+IQTREE_OPT="-bb 1000"
+IQTREE_OPT="-m HKY+I+F+G4 -bb 1000"
+IQTREE_THREADS=40
 GENOMESCOPE_THREADS=4
+FIS_MATRIX_THREADS=40
+LDHELMET_MAFFT_OPT="--auto --adjustdirection"
+LDHELMET_THETA=0.002
+LDHELMET_THREADS=5
+PHYLOFLASH_THREADS=5
 
 
 #Construct dic with ids for each group in RUN_FILE
@@ -75,8 +85,8 @@ ruleorder:
 	bwa_pese_run > bwa_pe_run > bwa_se_run
 ruleorder:
 	bcftools_consensus_run > mother_phase_run
-ruleorder:
-    get_backup_consensus_sequences > bcftools_consensus_run
+#ruleorder:
+#    get_backup_consensus_sequences > bcftools_consensus_run
 ruleorder:
 	genomescope_pese_run > genomescope_pe_run > genomescope_se_run
 
@@ -88,35 +98,81 @@ rule all:
     input: 
 		#[ID]-[REFID][EXTENSION FOR REF FILE]bwa[EXTENSION FOR FASTQ OF ID]freebayes[EXT]
         ###SCANS
-		#expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.txt", PATH=DATADIR, ID=GRPDIC["Messor"], MET="angsd contamhet".split(" ")),
-		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.gathered.txt", PATH=DATADIR, GRP="Messor".split(" "), MET="angsd contamhet".split(" ")),
+        #expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.txt", PATH=DATADIR, ID=GRPDIC["switchNovogene"], MET="angsd contamhet".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.{MET}.divestim.gathered.txt", PATH=DATADIR, GRP="Messor".split(" "), MET="angsd contamhet".split(" ")),
         ###CONSENSUS SEQUENCES ONLY
-		#expand("{PATH}/{ID}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID=GRPDIC["Messor"]),
-		#expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID=GRPDIC["Messor"]),
+        #expand("{PATH}/{ID}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID=GRPDIC["switchNovogene"]),
+        #expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.fasta", PATH=DATADIR, ID=GRPDIC["switchNovogene"]),
+        ###"phased" fasta for DILS
+        #expand("{PATH}/{ID}-allele1-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.dils.fasta", PATH=DATADIR, ID=GRPDIC["Messor"]),
 		###PHYLOS
         ##Mito
         #Full
-		#expand("{PATH}/{GRP}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.matrix.trimal.fasta.treefile", PATH=DATADIR, GRP="Messor".split(" ")),
+        expand("{PATH}/{GRP}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.matrix.fasta.treefile", PATH=DATADIR, GRP="structoribericusMales".split(" ")),
         #Per-gene
 		#expand("{PATH}/{GRP}-Mscabrinodis_mitoref.bwa.fastp.freebayes.bcfconsensus.{GENE}_singlegene.trimal.fasta.treefile", PATH=DATADIR, GRP="Messor".split(" "), GENE=MITOGENES),
         ##Nuclear
         #Full
-		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.matrix.trimal.fasta.treefile", PATH=DATADIR, GRP="Messorphased".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.matrix.fasta", PATH=DATADIR, GRP="MessorphasedNobad".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.matrix.trimal.fasta.treefile", PATH=DATADIR, GRP="MessorphasedNobad".split(" ")),
         #Per-gene
 		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.{GENE}_singlegene.trimal.fasta.treefile", PATH=DATADIR, GRP="Messor".split(" "), GENE=NUCGENES),
         ###SNPS
-		#expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfmerged.vcf", PATH=DATADIR, GRP="allstructor".split(" ")),
-        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayesgrp.vcf", PATH=DATADIR, GRP="allstructor".split(" ")),
+        #expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.vcf.gz", PATH=DATADIR, ID=GRPDIC["switchNovogene"]),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayesgrp.filtered.vcf", PATH=DATADIR, GRP="barbarusref structorref".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayesgrp.vcf", PATH=DATADIR, GRP="barbarusref structorref".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.bcfmerged.filtered.vcf", PATH=DATADIR, GRP="allstructor".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.bcfmerged.keep-{GRP2}.filtered.vcf", PATH=DATADIR, GRP="allstructor".split(" "), GRP2="ibericusMales structorMMales structor3Males".split(" ")),
+        ###GENETIC DISTANCES
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.bcfmerged.nocontam0.1.filtered.plinkgdist.mdist.txt", PATH=DATADIR, GRP="allstructor".split(" ")),
+        #expand("{PATH}/steiner.plinkgdist.mdist.txt", PATH=DATADIR, GRP="allstructor".split(" ")),
         ###NQUIRE
         #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.nquire.gathered.txt", PATH=DATADIR, GRP="Messor".split(" "))
         ###SMUDGEPLOT
-        expand("{PATH}/{ID}.fastp.gscope_k{KMER}.histo", PATH=DATADIR, ID="SH02-23 SH02-24".split(" "), KMER="11 15 21 26 31 36".split(" "))
-
+        #expand("{PATH}/{ID}.fastp.gscope_k{KMER}.histo", PATH=DATADIR, ID="SH02-23 SH02-24".split(" "), KMER="11 15 21 26 31 36".split(" "))
+        ###FIS MATRIX
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.bcfmerged.keep-allstructorQueens.fis.total.txt", PATH=DATADIR, GRP="allstructor".split(" ")),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.rmonofreebayes.bcfmerged.fis.total.txt", PATH=DATADIR, GRP="allstructor".split(" ")),
+        ###LDHELMET
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.freebayes.bcfconsensus.contig.{CONT}.mafft.ldhelmet.conf", PATH=DATADIR, GRP="WorkersFantomPat WorkersFantomMat WorkersStructorPat WorkersStructorMat".split(" "), CONT="11649at7399 123at7399 1602at7399 1895at7399 3237at7399 415at7399 439at7399 60at7399 61at7399 78at7399 88at7399".split(" ")),
+        ###COVERAGE
+        #expand("{PATH}/{ID}-Y15260_1_buscoref.bwa.fastp.coverage.overall.txt", PATH=DATADIR, ID=GRPDIC["switchNovogene"]),
+        #expand("{PATH}/{GRP}-Y15260_1_buscoref.bwa.fastp.coverage.overall.gathered.txt", PATH=DATADIR, GRP="Messor".split(" ")),
+        ###PHYLOFLASH
+        #expand("{PATH}/RINSAM_phyloflash.phyloFlash.tar.gz", PATH=DATADIR, ID=GRPDIC["Messor"]),
+        ###INDICES
+        #expand("{PATH}/{ID}.indexcnt.txt", PATH=DATADIR, ID=GRPDIC["Messor2022"]),
+        #expand("{PATH}/{ID}.lanecnt.txt", PATH=DATADIR, ID=GRPDIC["Messor2022"]),
 
 #######################################################
 #####RULES#############################################
 #######################################################
 
+#######################################################
+#check index
+rule index_pe_run:
+    input:	
+        forward="{PATH}/{ID}_1{EXT}fastq.gz",
+        reverse="{PATH}/{ID}_2{EXT}fastq.gz"
+    output:
+        out="{PATH}/{ID}{EXT}indexcnt.txt",
+    shell:
+        """ zcat {input.forward} | awk -v id={wildcards.ID} -v FS=":" 'NR%4==1{{!x[$10]++}}; END{{for(i in x){{print id,"forward",i,x[i]}}}}' > {output.out}; """
+        """ zcat {input.reverse} | awk -v id={wildcards.ID} -v FS=":" 'NR%4==1{{!x[$10]++}}; END{{for(i in x){{print id,"reverse",i,x[i]}}}}' >> {output.out}; """
+ 
+#######################################################
+#check index
+rule lane_pe_run:
+    input:	
+        forward="{PATH}/{ID}_1{EXT}fastq.gz",
+        reverse="{PATH}/{ID}_2{EXT}fastq.gz"
+    output:
+        out="{PATH}/{ID}{EXT}lanecnt.txt",
+    shell:
+        """ zcat {input.forward} | awk -v id={wildcards.ID} -v FS=":" 'NR%4==1{{!x[$2":"$3":"$4]++}}; END{{for(i in x){{print id,"forward",i,x[i]}}}}' > {output.out}; """
+        """ zcat {input.reverse} | awk -v id={wildcards.ID} -v FS=":" 'NR%4==1{{!x[$2":"$3":"$4]++}}; END{{for(i in x){{print id,"reverse",i,x[i]}}}}' >> {output.out}; """
+
+ 
 #######################################################
 #run fastp on single-end data
 rule fastp_se_run:
@@ -345,6 +401,19 @@ rule freebayes_run:
 		"freebayes -f {input.ref} {FREEBAYES_OPT} {input.bam} | bcftools norm -f {input.ref} - > {output}"
 
 #######################################################
+#call snp using freebayes and report monomorphic sites as well
+rule freebayes_rmono_run:
+	input:
+		bam="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}bam",
+		ref="{PATH}/{REF}{EXT}fasta",
+		refindex="{PATH}/{REF}{EXT}fasta.fai",
+	output:
+		vcf="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}rmonofreebayes.vcf",
+	shell:
+		"freebayes -f {input.ref} --report-monomorphic {FREEBAYES_OPT} {input.bam} | bcftools norm -f {input.ref} - > {output}"
+
+
+#######################################################
 #call snp using freebayes
 rule freebayes_group_run:
     input:
@@ -364,6 +433,51 @@ rule freebayes_group_run:
 
 
 #######################################################
+#Filter snps with samtools:
+rule vcf_filter:
+    input:
+        vcf="{PATH}.vcf.gz"
+    output:
+        vcf="{PATH}.filtered.vcf"
+    shell:
+        "vcftools --gzvcf {input.vcf} {VCFTOOLS_FILTER_OPT} --recode -c > {output.vcf};"
+
+#######################################################
+#Filter snps with samtools:
+rule vcf_keep:
+    input:
+        vcf="{PATH}.vcf.gz"
+    output:
+        vcf="{PATH}.keep-{GRP}.vcf",
+        ids=temp("{PATH}.keep-{GRP}.ids")
+    params:
+        ids=lambda wildcards: expand("{ID}", ID=GRPDIC[wildcards.GRP])
+    shell:
+        """ echo {params.ids} | tr " " "\n" > {output.ids}; """
+        "vcftools --gzvcf {input.vcf} --keep {output.ids} --recode -c > {output.vcf};"
+
+
+#######################################################
+#compute genetic distance matrix with plink
+rule plink_gdist_matrix:
+    input:
+        vcf="{PATH}.vcf.gz"
+    output:
+        log="{PATH}.plinkgdist.log",
+        mdist=temp("{PATH}.plinkgdist.mdist"),
+        ids="{PATH}.plinkgdist.mdist.id",
+        sex=temp("{PATH}.plinkgdist.nosex"),
+        mdist2="{PATH}.plinkgdist.mdist.txt",
+    params:
+        pre="{PATH}.plinkgdist"
+    threads:
+        int(PLINK_GDIST_THREADS)
+    shell:
+        "plink --allow-extra-chr {PLINK_GDIST_OPT} --threads {threads} --vcf {input.vcf} --out {params.pre};"
+        """ awk -v FS="\t" -v OFS="\t" -v ids="`cut -f1 {output.ids}`" 'BEGIN{{split(ids, ids2, "\\n"); head="ids"; for(i in ids2){{head=head""OFS""ids2[i]}}; print head}}; {{$0=ids2[NR]""OFS""$0; print $0}}' {output.mdist} > {output.mdist2}; """
+
+
+#######################################################
 #run bedtools to compute coverage
 rule bedtools_genomecov_run:
 	input:
@@ -371,8 +485,32 @@ rule bedtools_genomecov_run:
 	output:
 		bed="{PATH}.coverage.bed",
 	shell:
-		"bedtools genomecov -bga -max 100 -ibam {input.bam} > {output.bed};"
-		
+		"bedtools genomecov -bga -ibam {input.bam} > {output.bed};"
+	
+#######################################################
+#compute mean coverage
+rule mean_genomecov_run:
+	input:
+		bed="{PATH}/{ID}-{EXT}coverage.bed",
+	output:
+		pcont="{PATH}/{ID}-{EXT}coverage.percontig.txt",
+		all="{PATH}/{ID}-{EXT}coverage.overall.txt",
+	shell:
+	    "python {TOOLDIR}/scripts/mean_coverage.py {input.bed} {wildcards.ID} {output.pcont} {output.all} {BCFTOOLS_CONSENSUS_MINDP};"
+
+#######################################################
+#gather mean coverage
+rule mean_genomecov_gather:
+    input:
+        all=lambda wildcards: expand("{PATH}/{ID}-{EXT}coverage.overall.txt", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], EXT=wildcards.EXT),
+        pcont=lambda wildcards: expand("{PATH}/{ID}-{EXT}coverage.percontig.txt", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], EXT=wildcards.EXT),
+    output:
+        all="{PATH}/{GRP}-{EXT}coverage.overall.gathered.txt",
+        pcont="{PATH}/{GRP}-{EXT}coverage.percontig.gathered.txt",
+    shell:
+        """ awk 'FNR==2 || NR == 1' {input.all} > {output.all}; """
+        """ awk 'FNR>1 || NR == 1' {input.pcont} > {output.pcont}; """
+	
 #######################################################
 #Consensus sequence with bcftools
 rule bcftools_consensus_run:
@@ -394,13 +532,13 @@ rule bcftools_consensus_run:
 
 #######################################################
 #Make use of back up sequences in consensus_sequences directory instead or running the whole thing again
-rule get_backup_consensus_sequences:
-    input:
-        "{PATH}/consensus_sequences/{FILE}.bcfconsensus.backup.fasta"
-    output:
-        "{PATH}/{FILE}.bcfconsensus.fasta"
-    shell:
-        "cp {input} {output};"
+#rule get_backup_consensus_sequences:
+#    input:
+#        "{PATH}/consensus_sequences/{FILE}.bcfconsensus.backup.fasta"
+#    output:
+#        "{PATH}/{FILE}.bcfconsensus.fasta"
+#    shell:
+#        "cp {input} {output};"
         
 #######################################################
 #Phase daughter's vcf according to mother's
@@ -432,16 +570,40 @@ rule mother_phase_run:
 		""" bcftools consensus -s {wildcards.ID}_mat --mask {output.totbadcovbed} --mask-with "-" -f {input.ref} {output.totvcfpha} | awk -v maxgap={BCFTOOLS_CONSENSUS_MAXGAPPROP} '/>/{{head=$0}}; !/>/{{seq[head]=seq[head]""$0}}; END{{for(i in seq){{l=seq[i]; if((gsub("-", "", l)/length(seq[i]))<maxgap){{print i; print seq[i]}}}}}}' > {output.mat}; """
 		""" bcftools consensus -s {wildcards.ID}_pat --mask {output.totbadcovbed} --mask-with "-" -f {input.ref} {output.totvcfpha} | awk -v maxgap={BCFTOOLS_CONSENSUS_MAXGAPPROP} '/>/{{head=$0}}; !/>/{{seq[head]=seq[head]""$0}}; END{{for(i in seq){{l=seq[i]; if((gsub("-", "", l)/length(seq[i]))<maxgap){{print i; print seq[i]}}}}}}' > {output.pat}; """
 
+
+#######################################################
+#Output alelles in two different fasta (produce DILS input)
+rule dils_phase_run:
+	input:
+		vcf="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}freebayes.vcf",
+		covbed="{PATH}/{ID}-{REF}{EXT}bwa{EXT2}coverage.bed",
+		ref="{PATH}/{REF}{EXT}fasta",			
+	output:
+		badcovbed=temp("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}badcoverage.bed"),
+		vcfpha=temp("{PATH}/{ID}-totphased-{REF}{EXT}bwa{EXT2}freebayes.vcf.gz"),
+		vcfphaindex=temp("{PATH}/{ID}-totphased-{REF}{EXT}bwa{EXT2}freebayes.vcf.gz.csi"),
+		all1="{PATH}/{ID}-allele1-{REF}{EXT}bwa{EXT2}freebayes.bcfconsensus.dils.fasta",
+		all2="{PATH}/{ID}-allele2-{REF}{EXT}bwa{EXT2}freebayes.bcfconsensus.dils.fasta",
+	shell:
+		"awk -v min={BCFTOOLS_CONSENSUS_MINDP} '$4<min' {input.covbed}  > {output.badcovbed};"
+		"python {TOOLDIR}/scripts/vcf_dils_phase.py {input.vcf} | bgzip > {output.vcfpha};"
+		"bcftools index -f {output.vcfpha};"
+		""" bcftools consensus -s {wildcards.ID}_all1 --mask {output.badcovbed} --mask-with "-" -f {input.ref} {output.vcfpha} | awk -v maxgap={BCFTOOLS_CONSENSUS_MAXGAPPROP} '/>/{{head=$0}}; !/>/{{seq[head]=seq[head]""$0}}; END{{for(i in seq){{l=seq[i]; if((gsub("-", "", l)/length(seq[i]))<maxgap){{print i; print seq[i]}}}}}}' > {output.all1}; """
+		""" bcftools consensus -s {wildcards.ID}_all2 --mask {output.badcovbed} --mask-with "-" -f {input.ref} {output.vcfpha} | awk -v maxgap={BCFTOOLS_CONSENSUS_MAXGAPPROP} '/>/{{head=$0}}; !/>/{{seq[head]=seq[head]""$0}}; END{{for(i in seq){{l=seq[i]; if((gsub("-", "", l)/length(seq[i]))<maxgap){{print i; print seq[i]}}}}}}' > {output.all2}; """
+
+
 #######################################################
 #Compress vcf
 rule vcf_compress:
     input:
         "{PATH}.vcf"
     output:
-        vcf=temp("{PATH}.vcf.gz"),
-        index=temp("{PATH}.vcf.gz.csi"),
+        vcf="{PATH}.vcf.gz",
+        index="{PATH}.vcf.gz.csi",
+    threads:
+        int(VCF_COMPRESS_THREADS)
     shell:
-        "bgzip -c -f {input} > {output.vcf}; bcftools index -f {output.vcf};"
+        "bgzip -c -@ {threads} -f {input} > {output.vcf}; bcftools index -f {output.vcf};"
 
 #######################################################
 #Merge vcfs for a group
@@ -465,6 +627,20 @@ rule vcf_merge:
         "bedtools complement -L -i {output.badbed} -g {output.gen} > {output.goodbed};"
         "echo 'Merging vcf files!';"
         "bcftools merge --threads {threads} -R {output.goodbed} -0 -m all {input.vcfs} | bcftools norm -f {input.ref} > {output.vcf};"
+
+#######################################################
+#Merge vcfs for a group
+rule vcf_rmono_merge:
+    input:
+        ref="{PATH}/{REF}{EXT}fasta",	
+        vcfs=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}rmonofreebayes.vcf.gz", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
+        index=lambda wildcards: expand("{PATH}/{ID}-{REF}{EXT}bwa{EXT2}rmonofreebayes.vcf.gz.csi", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], REF=wildcards.REF, EXT=wildcards.EXT, EXT2=wildcards.EXT2),
+    output:
+        vcf="{PATH}/{GRP}-{REF}{EXT}bwa{EXT2}rmonofreebayes.bcfmerged.vcf",
+    threads:
+        int(BCFTOOLS_MERGE_THREADS)
+    shell:
+        "bcftools merge --threads {threads} -m all {input.vcfs} | bcftools norm -f {input.ref} > {output.vcf};"
 
 #######################################################
 #group-wise per-locus alignments + supermatrix
@@ -513,6 +689,21 @@ rule trimal_run:
         """
 
 #######################################################
+#Ensure all individuals in alignment are required from RUN_LIST. Useful to remove individuals post alignment.
+rule alignment_trim:
+    input:
+        "{PATH}/{GRP}{EXT}.fasta"
+    output:
+        out="{PATH}/{GRP}{EXT}.trimmed.fasta",
+        inds=temp("{PATH}/{GRP}{EXT}.trimmed.inds.txt")
+    params:
+        inds=lambda wildcards: expand("{ID}", ID=GRPDIC[wildcards.GRP])
+    shell:
+        "echo {params.inds} | tr ' ' '\n' | sed 's/^/>/g' > {output.inds};"
+        """ grep -A1 -f {output.inds} {input} | grep -v "^\-\-$" > {output.out}; """
+
+
+#######################################################
 #run iqtree on fasta
 rule iqtree_run:
     input:
@@ -520,7 +711,7 @@ rule iqtree_run:
     output:
         tree="{PATH}.fasta.treefile",
         repor="{PATH}.fasta.iqtree",
-        log=temp("{PATH}.fasta.log"),
+        log="{PATH}.fasta.log",
         bionj=temp("{PATH}.fasta.bionj"),
         ckp=temp("{PATH}.fasta.ckp.gz"),
         cont=temp("{PATH}.fasta.contree"),
@@ -639,6 +830,17 @@ rule nquire_run:
 
 
 #######################################################
+#Align with MACSE
+rule macse_run:
+    input:
+        "{PATH}.fasta"
+    output:
+        nt="{PATH}_NT.fasta",
+        aa="{PATH}_AA.fasta"
+    shell:
+        "java -jar {TOOLDIR}/macse/macse_v2.06.jar -prog alignSequences -seq {input};"
+    
+#######################################################
 #Run genomescope
 rule genomescope_pese_run:
     input:	
@@ -705,7 +907,7 @@ rule genomescope_se_run:
 
 
 #######################################################
-#Run genomescope (
+#Run genomescope 
 rule smudgeplot_run:
     input:
         jf="{PATH}/{ID}{EXT}gscope_k{KMER}.jf",
@@ -732,14 +934,86 @@ rule smudgeplot_run:
         "jellyfish dump -c -L $L -U $U {input.jf} | smudgeplot.py hetkmers -o {params.id};"
         "smudgeplot.py plot {output.cov} -o {params.id};"
     
-       
+      
+
+#######################################################
+#This needs a db constructed in miniconda3/path/envs/phyloflash_env/lib/phyloFlash
+#Run phyloflash
+rule phyloflash_se_run:
+    input:
+        forward="{PATH}/{ID}_1.fastq.gz",
+        reverse="{PATH}/{ID}_2.fastq.gz"
+    output:
+        tar="{PATH}/{ID}_phyloflash.phyloFlash.tar.gz",
+        log="{PATH}/{ID}_phyloflash.phyloFlash.log",
+        html="{PATH}/{ID}_phyloflash.phyloFlash.html",
+    params:
+        env="phyloflash_env",
+        tmpdir="{PATH}/{ID}_phyloflash.phyloFlash"
+    threads:
+        int(PHYLOFLASH_THREADS)
+    shell:        
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};"
+        "phyloFlash.pl -lib {wildcards.ID}_phyloflash -read1 {input.forward} -read2 {input.reverse} -CPUs {threads} -skip_emirge -almosteverything;"
+        "mv {wildcards.ID}_phyloflash.phyloFlash* {wildcards.PATH}/;"
+        "rm -rf {params.tmpdir};"
+        "mkdir -p {params.tmpdir};"
+        "cp {output.tar} {params.tmpdir};"
+        "cd {params.tmpdir};"
+        "tar -xzf {wildcards.ID}_phyloflash.phyloFlash.tar.gz;"
+        "rm -rf {params.tmpdir};"
+
+ 
+#######################################################
+#Run fis matrix
+rule fis_matrix:
+    input:
+        vcf="{PATH}.vcf"
+    output:
+        pge="{PATH}.fis.pergene.txt",
+        tot="{PATH}.fis.total.txt",
+    threads: int(FIS_MATRIX_THREADS)
+    shell:
+        "python {TOOLDIR}/scripts/vcf_compute_all_pairwise_fis.py {TOOLDIR}/scripts/vcf_compute_pairwise_fis.py {input.vcf} {threads};"
+
+#######################################################
+#Run ldhelmet on a given contig for a given groups
+rule ldhelmet_prepare:
+    input:
+        fastas=lambda wildcards: expand("{PATH}/{ID}{EXT}.fasta", PATH=wildcards.PATH, ID=GRPDIC[wildcards.GRP], EXT=wildcards.EXT)
+    output:
+        fasta=temp("{PATH}/{GRP}{EXT}.contig.{CONT}.fasta"),
+        fasta2="{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.fasta"
+    shell:
+        """ grep -A1 ">{wildcards.CONT}" {input.fastas} | grep -v "^\-\-$" | awk '/>/{{sub(":>.*$", "", $0); sub("^.*\\\/", "", $0); $0=">"$0}}; !/>/{{sub("^.*fasta-", "", $0)}}; {{print}}' > {output.fasta}; """
+        """ mafft {LDHELMET_MAFFT_OPT} {output.fasta} | awk '/>/{{head=$0}}; !/>/{{seq[head]=seq[head]''$0}}; END{{PROCINFO[\"sorted_in\"]=\"@ind_str_asc\"; for (i in seq){{print i; print toupper(seq[i])}}}}' | awk '/>/{{print}}; !/>/{{gsub("-", "N", $0); print}}' > {output.fasta2}; """
         
-
-
-
-
-
-
+#######################################################
+#Run ldhelmet on a given contig for a given groups
+rule ldhelmet_run:
+    input:
+        fasta="{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.fasta"
+    output:
+        conf=temp("{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.ldhelmet.conf"),
+        lk=temp("{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.ldhelmet.lk"),
+        pade=temp("{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.ldhelmet.pade"),
+        post=temp("{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.ldhelmet.post"),
+        resu="{PATH}/{GRP}{EXT}.contig.{CONT}.mafft.ldhelmet.results.txt"
+    params:
+        env="ldhelmet_env",
+    threads: int(LDHELMET_THREADS)
+    shell:
+        "set +eu;"
+        ". $(conda info --base)/etc/profile.d/conda.sh;"
+        "conda activate {params.env};" 
+        "echo {threads};"
+        "ldhelmet find_confs --num_threads {threads} -w 50 -o {output.conf} {input.fasta};" 
+        "ldhelmet table_gen --num_threads {threads} -c {output.conf} -t {LDHELMET_THETA} -r 0.0 0.1 10.0 1.0 100.0 -o {output.lk};"
+        "ldhelmet pade --num_threads {threads} -c {output.conf} -t {LDHELMET_THETA} -x 11 -o {output.pade};"
+        "ldhelmet rjmcmc --num_threads {threads} -w 50 -l {output.lk} -p {output.pade} -b 50.0 -s {input.fasta} --burn_in 100000 -n 1000000 -o {output.post};"
+        "ldhelmet post_to_text -m -p 0.025 -p 0.50 -p 0.975 -o {output.resu} {output.post};"
 
 
 

@@ -21,7 +21,7 @@ for l in open(vcf, "r"):
         if firstread:
             for c in open(bed, "r"):
                 c2=c.rstrip().split("\t")
-                if int(c2[3]) < mincov:
+                if int(float(c2[3])) < mincov:
                     if len(covs[c2[0]]) > 0 and covs[c2[0]][len(covs[c2[0]])-1][1] == int(c2[1]): 
                         covs[c2[0]][len(covs[c2[0]])-1][1]=int(c2[2])
                     else:
